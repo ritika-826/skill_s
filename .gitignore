@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+**/node_modules/
+venv/
+**/venv/
+
+# Environment Variables
+.env
+**/.env
+
+# Build outputs
+dist/
+**/dist/
+build/
+
+# Database data & logs
+database/mongodb_data/
+*.log
+
+# OS & Editor
+.DS_Store
+.vscode/
