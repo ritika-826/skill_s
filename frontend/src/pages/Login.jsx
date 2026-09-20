@@ -46,30 +46,6 @@ function Login() {
     }
   };
 
-  const handleQuickDemoLogin = async (demoEmail, demoPass) => {
-    setEmail(demoEmail);
-    setPassword(demoPass);
-    setError("");
-
-    try {
-      setLoading(true);
-      const data = await loginUser({ email: demoEmail, password: demoPass });
-      login(data.user, data.token);
-
-      const role = data.user?.role ? data.user.role.toLowerCase() : "student";
-      if (role === "recruiter") {
-        navigate("/recruiter/dashboard");
-      } else {
-        navigate("/dashboard");
-      }
-    } catch (err) {
-      console.error("DEMO LOGIN ERROR:", err);
-      setError(err.response?.data?.message || err.message || "Demo login failed");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div style={styles.page}>
       <div style={styles.container}>
@@ -150,29 +126,6 @@ function Login() {
                 {loading ? "Signing in..." : "Sign In →"}
               </button>
             </form>
-
-            {/* Quick Demo Role Logins */}
-            <div style={{ marginTop: "1.25rem", borderTop: "1px solid #1e293b", paddingTop: "1rem" }}>
-              <span style={{ fontSize: "0.78rem", color: "#94a3b8", display: "block", marginBottom: "0.5rem" }}>
-                ⚡ Quick Demo Login:
-              </span>
-              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                <button
-                  type="button"
-                  onClick={() => handleQuickDemoLogin("candidate@demo.com", "candidate123")}
-                  style={{ flex: 1, padding: "0.4rem", fontSize: "0.75rem", backgroundColor: "#1e293b", border: "1px solid #334155", color: "#38bdf8", borderRadius: "6px", cursor: "pointer", fontWeight: "600" }}
-                >
-                  🎓 Candidate Demo
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleQuickDemoLogin("recruiter@demo.com", "recruiter123")}
-                  style={{ flex: 1, padding: "0.4rem", fontSize: "0.75rem", backgroundColor: "#1e293b", border: "1px solid #334155", color: "#818cf8", borderRadius: "6px", cursor: "pointer", fontWeight: "600" }}
-                >
-                  💼 Recruiter Demo
-                </button>
-              </div>
-            </div>
 
             <div style={styles.footerRow}>
               <span>Don't have an account?</span>{" "}

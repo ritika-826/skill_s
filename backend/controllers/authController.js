@@ -88,28 +88,7 @@ const login = async (req, res, next) => {
     }
 
     const cleanEmail = email.toLowerCase().trim();
-    let user = await User.findOne({ email: cleanEmail });
-
-    // Auto-seed Demo Accounts for easy testing
-    if (!user) {
-      if (cleanEmail === "recruiter@demo.com" || cleanEmail.startsWith("recruiter@")) {
-        const hashedPassword = await bcrypt.hash(password || "recruiter123", 10);
-        user = await User.create({
-          name: "Talent Recruiter",
-          email: cleanEmail,
-          password: hashedPassword,
-          role: "recruiter",
-        });
-      } else if (cleanEmail === "candidate@demo.com") {
-        const hashedPassword = await bcrypt.hash(password || "candidate123", 10);
-        user = await User.create({
-          name: "Sample Candidate",
-          email: cleanEmail,
-          password: hashedPassword,
-          role: "student",
-        });
-      }
-    }
+    const user = await User.findOne({ email: cleanEmail });
 
     if (!user) {
       return res.status(401).json({
