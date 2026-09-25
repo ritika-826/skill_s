@@ -87,7 +87,7 @@ const calculateAssessmentScore = async ({ quiz, answers, answerMap }) => {
       qCodingMarks = Math.round(qCodingMarks * 100) / 100;
       codingMarks += qCodingMarks;
 
-      const isCorrect = qCodingMarks >= 0.8; // Considered passed if >= 80% test cases passed
+      const isCorrect = totalTestCases > 0 && testCasesPassed === totalTestCases;
 
       if (isCorrect) {
         topicStats[qTopic].correct += 1;

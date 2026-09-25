@@ -298,7 +298,7 @@ const runCodeAgainstTestCases = async ({
         isCustom ||
         (!execResult.isTimeout &&
           execResult.exitCode === 0 &&
-          (expectedStr === "" || actualOutput === expectedStr));
+          actualOutput === expectedStr);
 
       if (isPassed && !isCustom) {
         passedCount++;
@@ -321,10 +321,30 @@ const runCodeAgainstTestCases = async ({
     cleanup();
 
     const totalCount = customInput !== undefined ? 1 : effectiveTestCases.length;
-    const score = totalCount === 0 ? 100 : Math.round((passedCount / totalCount) * 100);
+    const score = totalCount === 0 ? 0 : Math.round((passedCount / totalCount) * 100);
 
     const overallOutput = firstStdout.trim() || (testResults[0]?.actualOutput || "");
     const overallError = firstStderr.trim() || null;
+
+    let executionStatus = "Failed";
+    if (customInput !== undefined) {
+      executionStatus = "Executed";
+    } else if (passedCount === totalCount && totalCount > 0) {
+      executionStatus = "All Passed";
+    } else if (passedCount > 0) {
+      executionStatus = "Partially Passed";
+    } else {
+      const errStr = overallError || "";
+      if (errStr.includes("SyntaxError") || errStr.includes("syntax error")) {
+        executionStatus = "Syntax Error";
+      } else if (errStr.includes("timed out") || testResults.some((t) => t.isTimeout)) {
+        executionStatus = "Time Limit Exceeded";
+      } else if (errStr.length > 0) {
+        executionStatus = "Runtime Error";
+      } else {
+        executionStatus = "Failed";
+      }
+    }
 
     return {
       success: overallError ? false : true,
@@ -336,14 +356,7 @@ const runCodeAgainstTestCases = async ({
       totalCount,
       results: testResults,
       testResults,
-      executionStatus:
-        customInput !== undefined
-          ? "Executed"
-          : passedCount === totalCount
-          ? "All Passed"
-          : passedCount > 0
-          ? "Partially Passed"
-          : "Failed",
+      executionStatus,
     };
   } catch (err) {
     cleanup();

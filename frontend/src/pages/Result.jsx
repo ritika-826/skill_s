@@ -341,7 +341,7 @@ function Result() {
                   </div>
 
                   <p style={styles.reviewQuestionText}>
-                    {q?.questionText || "Question text unavailable"}
+                    {q?.questionText || q?.problemStatement || q?.title || "Question text unavailable"}
                   </p>
 
                   {/* If MCQ question */}
@@ -376,9 +376,9 @@ function Result() {
                     <div style={styles.reviewDetails}>
                       <div style={styles.codeSnippetHeader}>
                         <span>Language: <strong>{ans.language || "javascript"}</strong></span>
-                        {ans.testCasesPassed !== undefined && ans.testCasesTotal !== undefined && (
+                        {(ans.testCasesPassed !== undefined || ans.totalTestCases !== undefined || ans.testCasesTotal !== undefined) && (
                           <span style={{ color: isCorrect ? "#4ade80" : "#fca5a5", fontWeight: "700" }}>
-                            {ans.testCasesPassed} / {ans.testCasesTotal} Test Cases Passed
+                            {ans.testCasesPassed || 0} / {ans.totalTestCases ?? ans.testCasesTotal ?? 0} Test Cases Passed {ans.executionStatus ? `(${ans.executionStatus})` : ""}
                           </span>
                         )}
                       </div>
