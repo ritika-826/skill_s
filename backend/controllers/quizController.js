@@ -20,6 +20,37 @@ const normalizeText = (text) => {
   return text.toLowerCase().replace(/[^a-z0-9]/g, "").trim();
 };
 
+const cleanStarterCode = (starterCode) => {
+  if (!starterCode || typeof starterCode !== "object") return {};
+  const cleaned = {};
+  const langs = ["javascript", "python", "java", "cpp", "c"];
+  langs.forEach((lang) => {
+    const raw = starterCode[lang] || "";
+    if (
+      raw.includes("localeCompare") ||
+      raw.includes("count4xx") ||
+      raw.includes("TreeSet") ||
+      raw.includes("qsort") ||
+      raw.includes("pairs.sort")
+    ) {
+      if (lang === "javascript") {
+        cleaned[lang] = `// Read input from standard input (stdin)\nconst fs = require('fs');\nconst input = fs.readFileSync(0, 'utf-8').trim();\n\n// Write your solution here\n`;
+      } else if (lang === "python") {
+        cleaned[lang] = `import sys\n\ninput_text = sys.stdin.read().strip()\n# Write your solution here\n`;
+      } else if (lang === "java") {
+        cleaned[lang] = `import java.util.Scanner;\n\npublic class Main {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        // Write your solution here\n        \n    }\n}\n`;
+      } else if (lang === "cpp") {
+        cleaned[lang] = `#include <iostream>\nusing namespace std;\n\nint main() {\n    // Write your solution here\n    \n    return 0;\n}\n`;
+      } else if (lang === "c") {
+        cleaned[lang] = `#include <stdio.h>\n\nint main() {\n    // Write your solution here\n    \n    return 0;\n}\n`;
+      }
+    } else {
+      cleaned[lang] = raw;
+    }
+  });
+  return cleaned;
+};
+
 // Unique hash generator for deduplication
 const computeQuestionHash = (text) => {
   return crypto.createHash("md5").update(normalizeText(text)).digest("hex");
@@ -693,7 +724,7 @@ const startQuiz = async (req, res, next) => {
           examples: q.examples,
           // Only reveal public test cases to student during active quiz
           testCases: (q.testCases || []).filter((tc) => !tc.isHidden),
-          starterCode: q.starterCode,
+          starterCode: cleanStarterCode(q.starterCode),
           timeLimit: q.timeLimit,
           memoryLimit: q.memoryLimit,
           topic: q.topic,
@@ -830,7 +861,7 @@ const getQuiz = async (req, res, next) => {
             constraints: q.constraints,
             examples: q.examples,
             testCases: (q.testCases || []).filter((tc) => !tc.isHidden),
-            starterCode: q.starterCode,
+            starterCode: cleanStarterCode(q.starterCode),
             timeLimit: q.timeLimit,
             memoryLimit: q.memoryLimit,
             topic: q.topic,

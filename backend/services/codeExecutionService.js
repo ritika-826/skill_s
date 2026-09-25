@@ -31,7 +31,8 @@ const findExecutable = (name, fallback) => {
   }
 
   try {
-    const res = execSync(`where.exe ${name}`, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+    const lookupCmd = process.platform === "win32" ? `where.exe ${name}` : `which ${name}`;
+    const res = execSync(lookupCmd, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
     const lines = res.trim().split(/\r?\n/);
     for (const line of lines) {
       if (line && !line.includes("WindowsApps") && fs.existsSync(line)) {
