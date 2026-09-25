@@ -106,10 +106,9 @@ async function testFullFlow() {
     );
 
     console.log("Submission Response:");
-    console.log("Score (MCQ Correct):", submitRes.data.score);
-    console.log("MCQ Score (%):", submitRes.data.mcqScore);
-    console.log("Coding Score (%):", submitRes.data.codingScore);
-    console.log("Overall Score (%):", submitRes.data.overallScore);
+    console.log("Overall Score (Marks):", submitRes.data.overallScore, "/", submitRes.data.totalQuestions);
+    console.log("MCQ Score (Marks):", submitRes.data.mcqScore);
+    console.log("Coding Score (Marks):", submitRes.data.codingScore);
     console.log("Percentage (%):", submitRes.data.percentage);
     console.log("Integrity Status:", submitRes.data.result.monitoringSummary.integrityStatus);
     console.log("Tab Switches:", submitRes.data.result.monitoringSummary.tabSwitches);

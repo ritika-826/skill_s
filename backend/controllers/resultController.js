@@ -1,5 +1,6 @@
 const Result = require("../models/Result");
 const Quiz = require("../models/Quiz");
+const { calculateAssessmentScore } = require("../utils/scoreCalculator");
 
 // SUBMIT QUIZ VIA RESULT CONTROLLER
 const submitQuiz = async (req, res, next) => {
@@ -24,9 +25,30 @@ const submitQuiz = async (req, res, next) => {
     }
 
     if (quiz.completed) {
-      return res.status(400).json({
-        message: "Assessment has already been submitted",
-      });
+      const existingResult = await Result.findOne({ quiz: quiz._id, user: req.user.userId })
+        .populate("quiz")
+        .populate("answers.question");
+
+      if (existingResult) {
+        return res.status(200).json({
+          message: "Assessment already submitted",
+          quizId: quiz._id,
+          resultId: existingResult._id,
+          role: quiz.role,
+          score: existingResult.score,
+          mcqScore: existingResult.mcqScore,
+          codingScore: existingResult.codingScore,
+          overallScore: existingResult.overallScore,
+          totalQuestions: existingResult.totalQuestions,
+          percentage: existingResult.percentage,
+          timeTaken: existingResult.timeTaken,
+          topicPerformance: existingResult.topicPerformance,
+          strengths: existingResult.strengths,
+          weaknesses: existingResult.weaknesses,
+          recommendations: existingResult.recommendations,
+          result: existingResult,
+        });
+      }
     }
 
     // Timer enforcement
@@ -37,103 +59,58 @@ const submitQuiz = async (req, res, next) => {
     let answerMap = {};
     if (Array.isArray(answers)) {
       answers.forEach((ans) => {
-        if (ans.questionId) {
-          answerMap[ans.questionId] = ans.selectedAnswer || "";
+        if (ans && ans.questionId) {
+          answerMap[ans.questionId] = ans;
         }
       });
-    } else if (typeof answers === "object") {
+    } else if (typeof answers === "object" && answers !== null) {
       answerMap = answers;
     }
 
-    let score = 0;
-    const processedAnswers = [];
-    const topicStats = {};
-
-    if (quiz.topics && quiz.topics.length > 0) {
-      quiz.topics.forEach((top) => {
-        topicStats[top] = { correct: 0, total: 0 };
+    if (Array.isArray(req.body.codingAnswers)) {
+      req.body.codingAnswers.forEach((ca) => {
+        if (ca && ca.questionId) {
+          answerMap[ca.questionId] = ca;
+        }
       });
     }
 
-    for (const question of quiz.questions) {
-      const qId = question._id.toString();
-      const selected = answerMap[qId] || "";
-      const isCorrect = selected === question.correctAnswer;
-
-      if (isCorrect) {
-        score++;
-      }
-
-      const qTopic = question.topic || "General";
-      if (!topicStats[qTopic]) {
-        topicStats[qTopic] = { correct: 0, total: 0 };
-      }
-      topicStats[qTopic].total += 1;
-      if (isCorrect) {
-        topicStats[qTopic].correct += 1;
-      }
-
-      processedAnswers.push({
-        question: question._id,
-        selectedAnswer: selected,
-        isCorrect: isCorrect,
-      });
-    }
-
-    const totalQuestions = quiz.questions.length;
-    const percentage = totalQuestions === 0 ? 0 : Math.round((score / totalQuestions) * 100);
+    const evaluated = await calculateAssessmentScore({ quiz, answers, answerMap });
     const actualTimeTaken = Math.min(Math.round(elapsedSeconds), quiz.duration || 1200);
 
-    const topicPerformance = Object.keys(topicStats).map((tName) => {
-      const stats = topicStats[tName];
-      const tPct = stats.total === 0 ? 0 : Math.round((stats.correct / stats.total) * 100);
-      return {
-        topic: tName,
-        correct: stats.correct,
-        total: stats.total,
-        percentage: tPct,
-      };
-    });
-
-    const strengths = [];
-    const weaknesses = [];
-    const recommendations = [];
-
-    topicPerformance.forEach((tp) => {
-      if (tp.percentage >= 70) {
-        strengths.push(tp.topic);
-      } else {
-        weaknesses.push(tp.topic);
-        recommendations.push(
-          `Review core concepts and practical workflows for ${tp.topic} to improve performance.`
-        );
-      }
-    });
-
-    if (weaknesses.length === 0) {
-      recommendations.push("Excellent work! Outstanding performance across all assessment skills.");
-    }
-
-    quiz.score = score;
+    quiz.mcqScore = evaluated.mcqScore;
+    quiz.codingScore = evaluated.codingScore;
+    quiz.overallScore = evaluated.overallScore;
+    quiz.score = evaluated.overallScore;
+    quiz.percentage = evaluated.percentage;
     quiz.completed = true;
     quiz.status = isExpired ? "expired" : "completed";
     quiz.endTime = new Date();
-    quiz.answers = processedAnswers;
+    quiz.answers = evaluated.evaluatedAnswers;
     await quiz.save();
 
     const result = await Result.create({
       user: req.user.userId,
       quiz: quizId,
       role: quiz.role,
-      score,
-      totalQuestions,
-      percentage,
+      isCustomRole: quiz.isCustomRole,
+      score: evaluated.overallScore,
+      mcqScore: evaluated.mcqScore,
+      codingScore: evaluated.codingScore,
+      overallScore: evaluated.overallScore,
+      percentage: evaluated.percentage,
+      totalQuestions: evaluated.totalPossibleMarks,
+      attemptedCount: evaluated.attemptedCount,
+      skippedCount: evaluated.skippedCount,
+      correctCount: evaluated.correctCount,
+      incorrectCount: evaluated.incorrectCount,
       timeTaken: actualTimeTaken,
-      topicPerformance,
-      strengths,
-      weaknesses,
-      recommendations,
-      answers: processedAnswers,
+      topicPerformance: evaluated.topicPerformance,
+      difficultyPerformance: evaluated.difficultyPerformance,
+      strengths: evaluated.strengths,
+      weaknesses: evaluated.weaknesses,
+      recommendations: evaluated.recommendations,
+      answers: evaluated.evaluatedAnswers,
     });
 
     const populatedResult = await Result.findById(result._id)
@@ -145,14 +122,18 @@ const submitQuiz = async (req, res, next) => {
       quizId,
       resultId: result._id,
       role: quiz.role,
-      score,
-      totalQuestions,
-      percentage,
+      score: evaluated.overallScore,
+      mcqScore: evaluated.mcqScore,
+      codingScore: evaluated.codingScore,
+      overallScore: evaluated.overallScore,
+      totalQuestions: evaluated.totalPossibleMarks,
+      percentage: evaluated.percentage,
       timeTaken: actualTimeTaken,
-      topicPerformance,
-      strengths,
-      weaknesses,
-      recommendations,
+      topicPerformance: evaluated.topicPerformance,
+      difficultyPerformance: evaluated.difficultyPerformance,
+      strengths: evaluated.strengths,
+      weaknesses: evaluated.weaknesses,
+      recommendations: evaluated.recommendations,
       result: populatedResult,
     });
   } catch (error) {

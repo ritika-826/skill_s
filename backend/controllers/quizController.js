@@ -5,6 +5,7 @@ const Result = require("../models/Result");
 const User = require("../models/User");
 const { generateAIQuiz, generateAICodingQuestion } = require("../services/aiService");
 const { runCodeAgainstTestCases } = require("../services/codeExecutionService");
+const { calculateAssessmentScore } = require("../utils/scoreCalculator");
 const {
   ROLE_SKILLS_MAP,
   getRoles,
@@ -976,186 +977,10 @@ const submitQuiz = async (req, res, next) => {
       });
     }
 
-    let mcqCorrectCount = 0;
-    let totalMcqQuestions = 0;
-    let totalCodingScoreSum = 0;
-    let totalCodingQuestions = 0;
-
-    let attemptedCount = 0;
-    let skippedCount = 0;
-
-    const evaluatedAnswers = [];
-    const topicStats = {};
-    const diffStats = { easy: { correct: 0, total: 0 }, medium: { correct: 0, total: 0 }, hard: { correct: 0, total: 0 } };
-
-    if (quiz.topics && quiz.topics.length > 0) {
-      quiz.topics.forEach((top) => {
-        topicStats[top] = { correct: 0, total: 0 };
-      });
-    }
-
-    for (const question of quiz.questions) {
-      const qId = question._id.toString();
-      const userAnsObj = answerMap[qId];
-      const qTopic = question.topic || "General";
-      const qDiff = (question.difficulty || "medium").toLowerCase();
-
-      if (!topicStats[qTopic]) {
-        topicStats[qTopic] = { correct: 0, total: 0 };
-      }
-      topicStats[qTopic].total += 1;
-
-      if (diffStats[qDiff]) {
-        diffStats[qDiff].total += 1;
-      }
-
-      if (question.questionType === "coding") {
-        totalCodingQuestions++;
-        const submittedCode = typeof userAnsObj === "object" && userAnsObj !== null ? userAnsObj.code || "" : "";
-        const submittedLang = typeof userAnsObj === "object" && userAnsObj !== null ? userAnsObj.language || "javascript" : "javascript";
-
-        if (submittedCode.trim()) {
-          attemptedCount++;
-        } else {
-          skippedCount++;
-        }
-
-        // Run code against test cases
-        let codingScore = 0;
-        let testCasesPassed = 0;
-        let totalTestCases = (question.testCases || []).length;
-        let execStatus = "unattempted";
-
-        if (submittedCode.trim() && totalTestCases > 0) {
-          const runRes = await runCodeAgainstTestCases({
-            code: submittedCode,
-            language: submittedLang,
-            testCases: question.testCases,
-            timeLimit: question.timeLimit || 3,
-          });
-          codingScore = runRes.score || 0;
-          testCasesPassed = runRes.passedCount || 0;
-          execStatus = runRes.executionStatus || "Evaluated";
-        }
-
-        totalCodingScoreSum += codingScore;
-        const isCorrect = codingScore >= 80;
-
-        if (isCorrect) {
-          topicStats[qTopic].correct += 1;
-          if (diffStats[qDiff]) diffStats[qDiff].correct += 1;
-        }
-
-        evaluatedAnswers.push({
-          question: question._id,
-          code: submittedCode,
-          language: submittedLang,
-          codingScore,
-          testCasesPassed,
-          totalTestCases,
-          executionStatus: execStatus,
-          isCorrect,
-        });
-      } else {
-        // MCQ Question
-        totalMcqQuestions++;
-        const selected =
-          typeof userAnsObj === "object" && userAnsObj !== null
-            ? userAnsObj.selectedAnswer || userAnsObj.answer || ""
-            : typeof userAnsObj === "string"
-            ? userAnsObj
-            : "";
-        const isCorrect = Boolean(selected) && (
-          selected.trim().toLowerCase() === (question.correctAnswer || "").trim().toLowerCase()
-        );
-
-        if (selected) {
-          attemptedCount++;
-        } else {
-          skippedCount++;
-        }
-
-        if (isCorrect) {
-          mcqCorrectCount++;
-          topicStats[qTopic].correct += 1;
-          if (diffStats[qDiff]) diffStats[qDiff].correct += 1;
-        }
-
-        evaluatedAnswers.push({
-          question: question._id,
-          selectedAnswer: selected,
-          isCorrect,
-        });
-      }
-    }
-
-    const totalQuestions = quiz.questions.length;
-    const avgCodingScore = totalCodingQuestions > 0 ? Math.round(totalCodingScoreSum / totalCodingQuestions) : 0;
-    const mcqPercentage = totalMcqQuestions > 0 ? Math.round((mcqCorrectCount / totalMcqQuestions) * 100) : 0;
-
-    // Calculate Combined Percentage
-    let overallPercentage = 0;
-    if (totalCodingQuestions > 0 && totalMcqQuestions > 0) {
-      // 60% MCQ, 40% Coding
-      overallPercentage = Math.round(mcqPercentage * 0.6 + avgCodingScore * 0.4);
-    } else if (totalCodingQuestions > 0) {
-      overallPercentage = avgCodingScore;
-    } else if (totalMcqQuestions > 0) {
-      overallPercentage = mcqPercentage;
-    }
+    // Evaluate assessment answers using central score calculator
+    const evaluated = await calculateAssessmentScore({ quiz, answers, answerMap });
 
     const actualTimeTaken = Math.min(Math.round(elapsedSeconds), quiz.duration);
-
-    const topicPerformance = Object.keys(topicStats).map((tName) => {
-      const stats = topicStats[tName];
-      const tPct = stats.total === 0 ? 0 : Math.round((stats.correct / stats.total) * 100);
-      return {
-        topic: tName,
-        correct: stats.correct,
-        total: stats.total,
-        percentage: tPct,
-      };
-    });
-
-    const difficultyPerformance = ["Easy", "Medium", "Hard"].map((level) => {
-      const key = level.toLowerCase();
-      const stats = diffStats[key] || { correct: 0, total: 0 };
-      const dPct = stats.total === 0 ? 0 : Math.round((stats.correct / stats.total) * 100);
-      return {
-        difficulty: level,
-        correct: stats.correct,
-        total: stats.total,
-        percentage: dPct,
-      };
-    });
-
-    const strengths = [];
-    const weaknesses = [];
-    const recommendations = [];
-
-    topicPerformance.forEach((tp) => {
-      if (tp.percentage >= 70) {
-        strengths.push(tp.topic);
-      } else {
-        weaknesses.push(tp.topic);
-        recommendations.push(
-          `Review core workflows and key concepts for ${tp.topic} to improve technical proficiency.`
-        );
-      }
-    });
-
-    if (totalCodingQuestions > 0) {
-      if (avgCodingScore >= 80) {
-        strengths.push("Hands-on Problem Solving & Coding");
-      } else {
-        weaknesses.push("Coding Edge Cases & Test Coverage");
-        recommendations.push("Practice edge case boundary conditions and time complexity optimization in coding assessments.");
-      }
-    }
-
-    if (weaknesses.length === 0) {
-      recommendations.push("Great job! You demonstrated strong proficiency across all technical topics and coding tasks.");
-    }
 
     // Aggregate Proctoring / Monitoring Summary
     let explicitTabSwitches = req.body.monitoringSummary?.tabSwitches || 0;
@@ -1215,15 +1040,15 @@ const submitQuiz = async (req, res, next) => {
     monitoringSummary.integrityScore = integrityScore;
 
     // Save quiz status
-    quiz.mcqScore = mcqPercentage;
-    quiz.codingScore = avgCodingScore;
-    quiz.overallScore = overallPercentage;
-    quiz.score = mcqCorrectCount;
-    quiz.percentage = overallPercentage;
+    quiz.mcqScore = evaluated.mcqScore;
+    quiz.codingScore = evaluated.codingScore;
+    quiz.overallScore = evaluated.overallScore;
+    quiz.score = evaluated.overallScore;
+    quiz.percentage = evaluated.percentage;
     quiz.completed = true;
     quiz.endTime = new Date();
     quiz.status = assessmentStatus;
-    quiz.answers = evaluatedAnswers;
+    quiz.answers = evaluated.evaluatedAnswers;
     await quiz.save();
 
     // Create Result document in MongoDB
@@ -1232,23 +1057,23 @@ const submitQuiz = async (req, res, next) => {
       quiz: quiz._id,
       role: quiz.role,
       isCustomRole: quiz.isCustomRole,
-      score: mcqCorrectCount,
-      mcqScore: mcqPercentage,
-      codingScore: avgCodingScore,
-      overallScore: overallPercentage,
-      percentage: overallPercentage,
-      totalQuestions: totalQuestions,
-      attemptedCount,
-      skippedCount,
-      correctCount: mcqCorrectCount,
-      incorrectCount: totalQuestions - mcqCorrectCount,
+      score: evaluated.overallScore,
+      mcqScore: evaluated.mcqScore,
+      codingScore: evaluated.codingScore,
+      overallScore: evaluated.overallScore,
+      percentage: evaluated.percentage,
+      totalQuestions: evaluated.totalPossibleMarks,
+      attemptedCount: evaluated.attemptedCount,
+      skippedCount: evaluated.skippedCount,
+      correctCount: evaluated.correctCount,
+      incorrectCount: evaluated.incorrectCount,
       timeTaken: actualTimeTaken,
-      topicPerformance: topicPerformance,
-      difficultyPerformance: difficultyPerformance,
-      strengths: strengths,
-      weaknesses: weaknesses,
-      recommendations: recommendations,
-      answers: evaluatedAnswers,
+      topicPerformance: evaluated.topicPerformance,
+      difficultyPerformance: evaluated.difficultyPerformance,
+      strengths: evaluated.strengths,
+      weaknesses: evaluated.weaknesses,
+      recommendations: evaluated.recommendations,
+      answers: evaluated.evaluatedAnswers,
       monitoringEvents: formattedEvents.length > 0 ? formattedEvents : (monitoringEvents || []),
       monitoringSummary: monitoringSummary,
     });
@@ -1262,17 +1087,18 @@ const submitQuiz = async (req, res, next) => {
       quizId: quiz._id,
       resultId: result._id,
       role: quiz.role,
-      score: mcqCorrectCount,
-      mcqScore: mcqPercentage,
-      codingScore: avgCodingScore,
-      overallScore: overallPercentage,
-      percentage: overallPercentage,
+      score: evaluated.overallScore,
+      mcqScore: evaluated.mcqScore,
+      codingScore: evaluated.codingScore,
+      overallScore: evaluated.overallScore,
+      totalQuestions: evaluated.totalPossibleMarks,
+      percentage: evaluated.percentage,
       timeTaken: actualTimeTaken,
-      topicPerformance: topicPerformance,
-      difficultyPerformance: difficultyPerformance,
-      strengths: strengths,
-      weaknesses: weaknesses,
-      recommendations: recommendations,
+      topicPerformance: evaluated.topicPerformance,
+      difficultyPerformance: evaluated.difficultyPerformance,
+      strengths: evaluated.strengths,
+      weaknesses: evaluated.weaknesses,
+      recommendations: evaluated.recommendations,
       monitoringSummary: monitoringSummary,
       result: populatedResult,
     });

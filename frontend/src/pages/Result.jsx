@@ -74,10 +74,12 @@ function Result() {
     );
   }
 
-  const score = result.score || 0;
+  const score = result.overallScore !== undefined ? result.overallScore : (result.score || 0);
   const totalQuestions = result.totalQuestions || result.answers?.length || 20;
-  const percentage = result.percentage || 0;
-  const incorrect = Math.max(0, totalQuestions - score);
+  const percentage = result.percentage !== undefined ? result.percentage : (totalQuestions > 0 ? Math.round((score / totalQuestions) * 100) : 0);
+  const mcqMarks = result.mcqScore !== undefined ? result.mcqScore : 0;
+  const codingMarks = result.codingScore !== undefined ? result.codingScore : 0;
+  const incorrect = Math.max(0, totalQuestions - Math.round(score));
 
   // Format time taken
   const formatTime = (seconds) => {
@@ -121,7 +123,7 @@ function Result() {
         {/* Top Metric Cards */}
         <div style={styles.metricsGrid}>
           <div style={styles.metricCard}>
-            <span style={styles.metricLabel}>Overall Score</span>
+            <span style={styles.metricLabel}>Overall Score (Marks)</span>
             <div style={styles.metricValue}>
               {score} <span style={styles.metricSub}>/ {totalQuestions}</span>
             </div>
@@ -135,12 +137,10 @@ function Result() {
           </div>
 
           <div style={styles.metricCard}>
-            <span style={styles.metricLabel}>MCQ / Coding Split</span>
+            <span style={styles.metricLabel}>MCQ / Coding Split (Marks)</span>
             <div style={styles.metricValueSplit}>
-              <span style={{ color: "#38bdf8" }}>MCQ: {result.mcqScore !== undefined ? result.mcqScore : score}</span>
-              {result.codingScore !== undefined && (
-                <span style={{ color: "#818cf8" }}> | Coding: {result.codingScore}</span>
-              )}
+              <span style={{ color: "#38bdf8" }}>MCQ: {mcqMarks}</span>
+              <span style={{ color: "#818cf8" }}> | Coding: {codingMarks}</span>
             </div>
           </div>
 
