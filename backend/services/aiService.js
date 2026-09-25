@@ -107,7 +107,6 @@ int main() {
 `,
     },
   },
-  },
   "Backend Developer": {
     title: "Parse & Validate API Query Parameters",
     topic: "REST APIs & Data Processing",
