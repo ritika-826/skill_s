@@ -1,9 +1,10 @@
 {
   "name": "skill_specific",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Skill Specific Assessment Platform",
+  "main": "backend/server.js",
   "scripts": {
+    "start": "node backend/server.js",
     "build": "npm run build --prefix frontend",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -12,7 +13,13 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "axios": "^1.20.0",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
     "dotenv": "^17.4.2",
-    "mongoose": "^9.9.4"
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.9.4",
+    "multer": "^2.2.0"
   }
 }
