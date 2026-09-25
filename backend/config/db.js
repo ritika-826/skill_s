@@ -10,7 +10,6 @@ const connectDB = async () => {
     );
   } catch (error) {
     console.error("MongoDB connection failed:", error.message);
-    throw error;
   }
 };
 
